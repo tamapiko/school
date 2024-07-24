@@ -26,6 +26,7 @@
     };
 
     ws.onmessage = (event) => {
+      console.log(event.data); // 受信データをログに出力
       const imgElement = document.getElementById('screenCapture');
       imgElement.src = event.data;
     };
