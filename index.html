@@ -1,1 +1,42 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebSocket 画面キャプチャ送信</title>
+</head>
+<body>
+  <h1>画面キャプチャ送信</h1>
+  <button onclick="captureAndSend()">画面キャプチャを送信</button>
 
+  <script>
+    const ws = new WebSocket('wss://cloudlink.mikedev101.cc/0.2.0');
+
+    ws.onopen = () => {
+      console.log('サーバーに接続されました');
+    };
+
+    async function captureAndSend() {
+      try {
+        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        const track = stream.getVideoTracks()[0];
+        const imageCapture = new ImageCapture(track);
+
+        const bitmap = await imageCapture.grabFrame();
+        const canvas = document.createElement('canvas');
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        const context = canvas.getContext('2d');
+        context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+
+        const dataUrl = canvas.toDataURL('image/png');
+        ws.send(dataUrl);
+
+        track.stop(); // ストリームを停止
+      } catch (error) {
+        console.error('画面キャプチャエラー:', error);
+      }
+    }
+  </script>
+</body>
+</html>
