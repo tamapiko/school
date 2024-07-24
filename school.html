@@ -18,8 +18,12 @@
   </div>
 
   <script>
-    const correctPassword = 'your_password'; // 設定するパスワード
+    const correctPassword = 'secret123'; // 設定するパスワード
     const ws = new WebSocket('wss://cloudlink.mikedev101.cc/0.2.0');
+
+    ws.onopen = () => {
+      console.log('サーバーに接続されました');
+    };
 
     ws.onmessage = (event) => {
       const imgElement = document.getElementById('screenCapture');
