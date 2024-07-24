@@ -49,6 +49,7 @@
         context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
 
         const dataUrl = canvas.toDataURL('image/png');
+        console.log(dataUrl); // データURLをログに出力
         ws.send(dataUrl);
       } catch (error) {
         console.error('キャプチャ送信エラー:', error);
