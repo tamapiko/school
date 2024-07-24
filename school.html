@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebSocket 画面キャプチャ受信</title>
+</head>
+<body>
+  <h1>画面キャプチャ受信</h1>
+  <div id="login">
+    <h2>パスワードを入力してください</h2>
+    <input type="password" id="password" placeholder="パスワード">
+    <button onclick="authenticate()">ログイン</button>
+  </div>
+  <div id="viewer" style="display: none;">
+    <h2>画面キャプチャ</h2>
+    <img id="screenCapture" src="" alt="画面キャプチャ">
+  </div>
+
+  <script>
+    const correctPassword = 'your_password'; // 設定するパスワード
+    const ws = new WebSocket('wss://cloudlink.mikedev101.cc/0.2.0');
+
+    ws.onmessage = (event) => {
+      const imgElement = document.getElementById('screenCapture');
+      imgElement.src = event.data;
+    };
+
+    function authenticate() {
+      const enteredPassword = document.getElementById('password').value;
+      if (enteredPassword === correctPassword) {
+        document.getElementById('login').style.display = 'none';
+        document.getElementById('viewer').style.display = 'block';
+      } else {
+        alert('パスワードが違います');
+      }
+    }
+  </script>
+</body>
+</html>
