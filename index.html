@@ -1,95 +1,159 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <title>Gemini TTS 音声生成</title>
+  <meta charset="UTF-8" />
+  <title>Gemini TTS 音声生成（ブラウザ版）</title>
   <style>
-    body { font-family: sans-serif; max-width: 700px; margin: auto; padding: 2em; background: #f7f7f7; }
-    textarea, input { width: 100%; padding: 10px; margin-top: 1em; box-sizing: border-box; }
-    button { margin-top: 1em; padding: 10px; font-size: 16px; background-color: #2196F3; color: white; border: none; cursor: pointer; }
-    button:hover { background-color: #1976D2; }
-    audio { margin-top: 20px; width: 100%; }
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 700px;
+      margin: 2em auto;
+      background: #f9f9f9;
+      padding: 1em;
+      border-radius: 8px;
+    }
+    textarea, input {
+      width: 100%;
+      padding: 10px;
+      font-size: 1rem;
+      margin: 0.5em 0 1em;
+      box-sizing: border-box;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 1rem;
+      cursor: pointer;
+      background-color: #0078d4;
+      color: white;
+      border: none;
+      border-radius: 4px;
+    }
+    button:hover {
+      background-color: #005a9e;
+    }
+    audio {
+      margin-top: 20px;
+      width: 100%;
+      display: none;
+    }
+    #status {
+      margin-top: 10px;
+      white-space: pre-wrap;
+      font-family: monospace;
+      color: #444;
+    }
   </style>
 </head>
 <body>
-  <h1>🎧 Gemini TTS 音声生成 (HTML単体版)</h1>
-  <p>ラジオ台本や文章を入力して、Geminiで音声(mp3)を生成します。</p>
-  <textarea id="text">你好！欢迎收听中文节目！</textarea>
-  <input type="text" id="apiKey" placeholder="Gemini APIキーを入力してください">
-  <button onclick="generateAudio()">🎤 音声を生成</button>
-  <div id="status"></div>
-  <audio id="player" controls style="display:none;"></audio>
+  <h1>Gemini TTS 音声生成（ブラウザ版）</h1>
+  <label for="apiKey">APIキー（Google CloudのGemini APIキーを貼り付けてください）:</label>
+  <input type="password" id="apiKey" placeholder="APIキーをここに貼る" />
 
-  <script>
-    async function generateAudio() {
-      const text = document.getElementById('text').value;
-      const apiKey = document.getElementById('apiKey').value.trim();
-      const status = document.getElementById('status');
-      const player = document.getElementById('player');
-      status.textContent = "⏳ 生成中...";
+  <label for="textInput">テキストを入力してください:</label>
+  <textarea id="textInput" rows="8">こんにちは！はじめまして！この番組は、人工知能だけでお届けする中国語ラジオです！</textarea>
 
-      const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-preview-tts:streamGenerateContent?key=' + encodeURIComponent(apiKey);
-      const body = {
-        contents: [
-          {
-            role: "user",
-            parts: [{ text }]
-          }
-        ],
-        generationConfig: {
-          responseModalities: ["audio"],
-          temperature: 1,
-          speech_config: {
-            voice_config: {
-              prebuilt_voice_config: {
-                voice_name: "Zephyr"
-              }
+  <button id="btnGenerate">音声を生成する</button>
+
+  <p id="status"></p>
+  <audio id="audioPlayer" controls></audio>
+
+<script>
+  const btn = document.getElementById('btnGenerate');
+  const status = document.getElementById('status');
+  const audioPlayer = document.getElementById('audioPlayer');
+
+  btn.addEventListener('click', async () => {
+    const apiKey = document.getElementById('apiKey').value.trim();
+    const text = document.getElementById('textInput').value.trim();
+
+    if (!apiKey) {
+      alert('APIキーを入力してください');
+      return;
+    }
+    if (!text) {
+      alert('テキストを入力してください');
+      return;
+    }
+
+    status.textContent = '⏳ 送信中...';
+    audioPlayer.style.display = 'none';
+    audioPlayer.src = '';
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-preview-tts:streamGenerateContent?key=${encodeURIComponent(apiKey)}`;
+
+    const payload = {
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text }]
+        }
+      ],
+      generationConfig: {
+        responseModalities: ['audio'],
+        temperature: 1,
+        speech_config: {
+          voice_config: {
+            prebuilt_voice_config: {
+              voice_name: 'Zephyr'
             }
           }
         }
-      };
+      }
+    };
 
-      try {
-        const response = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body)
-        });
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
 
-        const reader = response.body.getReader();
-        let result = '';
-        const decoder = new TextDecoder();
+      if (!response.ok) {
+        const errorText = await response.text();
+        status.textContent = `❌ エラー: ${response.status}\n${errorText}`;
+        return;
+      }
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          result += decoder.decode(value);
-        }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
 
-        // すべての chunk を解析して base64 音声を取り出す
-        const lines = result.trim().split('\n');
+      while(true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop(); // 最後の未完了行は残す
+
         for (const line of lines) {
-          if (line.trim() === '') continue;
-          const json = JSON.parse(line);
-          const data = json?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-          const mime = json?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.mimeType;
-
-          if (data && mime) {
-            const audioBlob = new Blob([Uint8Array.from(atob(data), c => c.charCodeAt(0))], { type: mime });
-            const audioUrl = URL.createObjectURL(audioBlob);
-            player.src = audioUrl;
-            player.style.display = "block";
-            status.innerHTML = "✅ 音声生成完了！<br>↓ 下のプレイヤーから再生できます。";
-            return;
+          if (!line.trim()) continue;
+          try {
+            const json = JSON.parse(line);
+            const part = json?.candidates?.[0]?.content?.parts?.[0];
+            if (part?.inlineData) {
+              const base64 = part.inlineData.data;
+              const mimeType = part.inlineData.mimeType;
+              const binary = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+              const blob = new Blob([binary], { type: mimeType });
+              const audioUrl = URL.createObjectURL(blob);
+              audioPlayer.src = audioUrl;
+              audioPlayer.style.display = 'block';
+              status.textContent = '✅ 音声生成完了！再生ボタンを押してください。';
+              return; // 最初の音声データだけ使うので終了
+            }
+          } catch(e) {
+            console.warn('JSON解析エラー:', e);
           }
         }
-
-        status.textContent = "⚠️ 音声の生成に失敗しました。";
-      } catch (err) {
-        console.error(err);
-        status.textContent = "❌ エラーが発生しました: " + err.message;
       }
+
+      status.textContent = '⚠️ 音声データが取得できませんでした。';
+
+    } catch (error) {
+      status.textContent = '❌ ネットワークエラーなどが発生しました。\n' + error.message;
     }
-  </script>
+  });
+</script>
 </body>
 </html>
