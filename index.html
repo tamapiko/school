@@ -2,57 +2,92 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WebSocket 画面キャプチャ送信</title>
+  <title>Gemini TTS 音声生成</title>
+  <style>
+    body { font-family: sans-serif; max-width: 700px; margin: auto; padding: 2em; background: #f7f7f7; }
+    textarea, input { width: 100%; padding: 10px; margin-top: 1em; box-sizing: border-box; }
+    button { margin-top: 1em; padding: 10px; font-size: 16px; background-color: #2196F3; color: white; border: none; cursor: pointer; }
+    button:hover { background-color: #1976D2; }
+    audio { margin-top: 20px; width: 100%; }
+  </style>
 </head>
 <body>
-  <h1>画面キャプチャ送信</h1>
-  <button onclick="startCapture()">画面キャプチャ送信開始</button>
-  <button onclick="stopCapture()">画面キャプチャ送信停止</button>
+  <h1>🎧 Gemini TTS 音声生成 (HTML単体版)</h1>
+  <p>ラジオ台本や文章を入力して、Geminiで音声(mp3)を生成します。</p>
+  <textarea id="text">你好！欢迎收听中文节目！</textarea>
+  <input type="text" id="apiKey" placeholder="Gemini APIキーを入力してください">
+  <button onclick="generateAudio()">🎤 音声を生成</button>
+  <div id="status"></div>
+  <audio id="player" controls style="display:none;"></audio>
 
   <script>
-    const ws = new WebSocket('wss://cloudlink.mikedev101.cc/0.2.0');
-    let captureInterval;
-    let stream;
-    let imageCapture;
+    async function generateAudio() {
+      const text = document.getElementById('text').value;
+      const apiKey = document.getElementById('apiKey').value.trim();
+      const status = document.getElementById('status');
+      const player = document.getElementById('player');
+      status.textContent = "⏳ 生成中...";
 
-    ws.onopen = () => {
-      console.log('サーバーに接続されました');
-    };
+      const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-preview-tts:streamGenerateContent?key=' + encodeURIComponent(apiKey);
+      const body = {
+        contents: [
+          {
+            role: "user",
+            parts: [{ text }]
+          }
+        ],
+        generationConfig: {
+          responseModalities: ["audio"],
+          temperature: 1,
+          speech_config: {
+            voice_config: {
+              prebuilt_voice_config: {
+                voice_name: "Zephyr"
+              }
+            }
+          }
+        }
+      };
 
-    async function startCapture() {
       try {
-        stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-        const track = stream.getVideoTracks()[0];
-        imageCapture = new ImageCapture(track);
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
 
-        captureInterval = setInterval(captureAndSend, 1000); // 1秒ごとにキャプチャを送信
-      } catch (error) {
-        console.error('画面キャプチャエラー:', error);
-      }
-    }
+        const reader = response.body.getReader();
+        let result = '';
+        const decoder = new TextDecoder();
 
-    function stopCapture() {
-      clearInterval(captureInterval);
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
-    }
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          result += decoder.decode(value);
+        }
 
-    async function captureAndSend() {
-      try {
-        const bitmap = await imageCapture.grabFrame();
-        const canvas = document.createElement('canvas');
-        canvas.width = bitmap.width;
-        canvas.height = bitmap.height;
-        const context = canvas.getContext('2d');
-        context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        // すべての chunk を解析して base64 音声を取り出す
+        const lines = result.trim().split('\n');
+        for (const line of lines) {
+          if (line.trim() === '') continue;
+          const json = JSON.parse(line);
+          const data = json?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+          const mime = json?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.mimeType;
 
-        const dataUrl = canvas.toDataURL('image/png');
-        console.log(dataUrl); // データURLをログに出力
-        ws.send(dataUrl);
-      } catch (error) {
-        console.error('キャプチャ送信エラー:', error);
+          if (data && mime) {
+            const audioBlob = new Blob([Uint8Array.from(atob(data), c => c.charCodeAt(0))], { type: mime });
+            const audioUrl = URL.createObjectURL(audioBlob);
+            player.src = audioUrl;
+            player.style.display = "block";
+            status.innerHTML = "✅ 音声生成完了！<br>↓ 下のプレイヤーから再生できます。";
+            return;
+          }
+        }
+
+        status.textContent = "⚠️ 音声の生成に失敗しました。";
+      } catch (err) {
+        console.error(err);
+        status.textContent = "❌ エラーが発生しました: " + err.message;
       }
     }
   </script>
